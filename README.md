@@ -14,3 +14,48 @@ python runanova.py
     --wildtype WT
     [input table]
 ```
+
+## Output
+
+### Tables
+
+#### `anova.tsv`
+Presents a summary of the nested anova statistics from the input dataset.
+
+#### `growthcurves.tsv`
+Summarizes the statistics behind the anova analysis
+Will have the following columns:
+
+- `sample`: The sample id as it appears in the input table. It will be formatted as `[strain].[condition].[plate].[replicate]`.
+- `strain`, `condition`, `plate`, `replicate`: Extracted from the `sample` column.
+- `N`, `k`, `r`: The coefficients of a fitted logistic growth curve for the timeseries growth measurements behind each sample.
+- `sigma`: The uncertainty behind the fitted growth curve.
+- `auc_l`: The area under the curve from a logistic equation fitted to the growthcurve measurements for each sample.
+-  `auc_e`: The empirical area under the curve calculated from the growth curve data directly. 
+
+#### `regression.txt`
+Presents the regression statistics behind the anova model. This is essentially a constructed linear model with the estimated coefficients for each variable in the anova model.
+
+
+
+### File Structure
+```
+.
+|---- data
+|----|---- tukey
+|----|----|---- tukey.condition_strain.tsv
+|----|----|---- tukey.condition.tsv
+|----|----|---- tukey.plate.tsv
+|----|----|---- tukey.strain.tsv
+|----|----|---- tukey.tsv
+|----|---- anova.tsv
+|----|---- coefficients.tsv
+|----|---- growthcurves.tsv
+|----|---- regression.txt
+|----|---- statistics.tsvs
+|---- figures
+|----|---- anovaplot.main.(png|svg)
+|----|---- anovaplot.panel.(png|svg)
+|----|---- qq.svg
+|----|---- sigmas.svg
+````

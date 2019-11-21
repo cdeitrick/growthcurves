@@ -143,7 +143,6 @@ class AnovaPlot:
 		ax.tick_params(axis = 'both', labelsize = self.label_ticks_fontsize)
 
 		if ylims:
-			logger.info(f"Setting ylims as {ylims}")
 			ax.set_ylim(ylims[0], ylims[1])
 		return ax
 

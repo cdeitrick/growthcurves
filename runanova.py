@@ -131,14 +131,6 @@ class Filenames:
 	def save_regression(self, regression: linear_model.RegressionResults):
 		self.table_regression.write_text(str(regression.summary()))
 
-		data = {
-			'coefficients': regression.params,
-			'pvalues':      regression.pvalues,
-		}
-		df = pandas.DataFrame(data)
-
-		df.to_csv(self.table_coefficients, sep = '\t', index = False)
-
 	def save_qq(self, regression: linear_model.RegressionResults):
 		import matplotlib.pyplot as plt
 		from statsmodels.graphics import gofplots
