@@ -1,13 +1,16 @@
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import pandas
 import seaborn
+
 plt.style.use('ggplot')
 import equations
 
 from loguru import logger
+
+
 class PlotGrowthcurves:
 	def __init__(self, folder: Path, time_limit: Optional[int] = None):
 		self.folder = folder
@@ -62,7 +65,7 @@ class PlotGrowthcurves:
 
 
 class AnovaPlot:
-	def __init__(self, wildtype:str, control:str):
+	def __init__(self, wildtype: str, control: str):
 		# Save the wild-type label so that it can be plotted as the first strain.
 		self.control_strain = wildtype
 		self.control_condition = control
@@ -84,8 +87,130 @@ class AnovaPlot:
 		self.label_ticks_fontsize = 24
 		self.number_of_columns = 3
 
+	def _get_xorder(self, x: str, values: List[str]) -> Optional[List[str]]:
+		""" Returns the order in which the x-axis categorical variable should be plotted.
+			Usually done to make sure the wild-type or control condition are plotted first.
+		"""
+		if x == self.column_condition:
+			xorder = [self.control_condition] + sorted(i for i in values if i != self.control_condition)
+		elif x == self.column_sample:
+			xorder = [self.control_strain] + sorted(i for i in values if i != self.control_strain)
+		else:
+			message = f"The selected x-axis category does not correspond to an existing column in the input table."
+			logger.warning(message)
+			xorder = None
+		return xorder
 
-	def anovaplot(self, growthcurves: pandas.DataFrame, x: str, y: str, hue: str, ax: Optional[plt.Axes] = None, filename: Optional[Path] = None) -> plt.Axes:
+	@staticmethod
+	def _calculate_series_means(growthcurves: pandas.DataFrame, x: str, y: str, hue: str) -> pandas.DataFrame:
+		""" Calulates the mean values for all condition-strain series. """
+		dfs = list()
+		groups = growthcurves.groupby(by = [hue, x])  # 'strain', 'condition'
+		for index, group in groups:
+			mean = group.mean()[y]
+			_row = {
+				hue: index[0],
+				x:   index[1],
+				y:   mean
+			}
+			dfs.append(_row)
+		df = pandas.DataFrame(dfs)
+		return df
+
+	@staticmethod
+	def _arrange_table(table: pandas.DataFrame, by: str, control: str) -> pandas.DataFrame:
+		""" Basically sorts the data frame and put the control samples as the first sample in the table."""
+		table_control = table[table[by] == control]
+		table_notcontrol = table[table[by] != control]
+		return pandas.concat([table_control, table_notcontrol])
+
+	def format_plot_main(self, ax: plt.Axes, ylims: Tuple[int, int] = None) -> plt.Axes:
+		ax.set_xlabel("Condition", fontsize = self.label_axis_fontsize)
+		ax.set_ylabel("Fitness (AUC)", fontsize = self.label_axis_fontsize)
+		ax.tick_params(axis = 'both', labelsize = self.label_ticks_fontsize)
+
+		if ylims:
+			ax.set_ylim(ylims[0], ylims[1])
+		return ax
+
+	def format_plot(self, ax: plt.Axes, name: str, ylims: Tuple[int, int], is_first: bool) -> plt.Axes:
+		""" Applys formatting parameters to the plot.
+			Parameters
+			----------
+			ax: plt.Axes
+				The ax object with the plot.
+			name: str
+				The name/title of the ax.
+			ylims: Optional[Tuple[int,int]]
+				The minimum and maximum values observed over the dataset. Used to adjust the axis bounds so that the min and max points aren't
+				cut off. Also used to make the y-axis consistent across all subplots in the panel.
+			is_first:bool
+				Whether this plot is the first one in the row. Used to determine whether to keep the y-axis labels/ticks
+		"""
+
+		if ylims:
+			ax.set_ylim(ylims[0], ylims[1])
+		# Remove the legend for individual plots. Save the first legend to add it later in an empty section of the panel.
+		ax.get_legend().set_visible(False)
+		ax.tick_params(axis = 'x', rotation = 90)
+		ax.set_title(name, fontsize = 30)
+		ax.set_xlabel(self.label_x, fontsize = 20)
+		ax.set_ylabel(self.label_y, fontsize = 20)
+
+		# Since each row shares the same y-axis, disable the y-axis in all but the first plot in each column.
+		if is_first:
+			ax.yaxis.set_ticklabels([])
+			ax.set_ylabel("")
+
+		return ax
+	@staticmethod
+	def add_median(data: pandas.DataFrame, ax: plt.Axes, use_mean: bool = False) -> plt.Axes:
+		""" Adds the median/mean value of each series to a seaborn.stripplot.
+			Parameters
+			----------
+			data: pandas.DataFrame
+				Should have the means for each group.
+			ax: plt.Axes
+				The Axes object to add the median to.
+			use_mean:bool; default False
+				Whther to use the mean or median in the plot.
+
+		"""
+		median_width = 0.5  # 0.4
+		for tick, text in zip(ax.get_xticks(), ax.get_xticklabels()):
+			sample_name = text.get_text()  # "X" or "Y"
+
+			# calculate the median value for all replicates of either X or Y
+			if use_mean:
+				median_val = data[data['strain'] == sample_name].mean()
+			else:
+				median_val = data[data['strain'] == sample_name].median()
+
+			# plot horizontal lines across the column, centered on the tick
+			ax.plot(
+				# [tick - median_width / 2, tick + median_width / 2],
+				[tick - 0.1 - median_width / 2, tick - 0.1 + median_width / 2],
+
+				[median_val, median_val],
+				lw = 4, color = 'k'
+			)
+		return ax
+
+	def add_boxplot(self, data: pandas.DataFrame, x: str, y: str, hue: str, ax: plt.Axes) -> plt.Axes:
+		xorder = self._get_xorder(x, data[x].unique())
+		ax = seaborn.boxplot(
+			data = data,
+			x = x, y = y, hue = hue,
+			ax = ax,
+			palette = 'Set1',
+			order = xorder,
+			width = 0.1
+		)
+		return ax
+
+
+	def anovaplot(self, growthcurves: pandas.DataFrame, x: str, y: str, hue: str, ax: Optional[plt.Axes] = None,
+			filename: Optional[Path] = None) -> plt.Axes:
 		""" Plots the fitness of strains (area under the curve) against the condition.
 			Parameters
 			----------
@@ -107,18 +232,12 @@ class AnovaPlot:
 		# plt.style.use('ggplot')
 
 		if ax is None:
-			plt.close()
+			# plt.close()
 			fig, ax = plt.subplots(figsize = (12, 10))
 		# Make sure the wild-type variable is plotted first.
-		if x == self.column_condition:
-			xorder = [self.control_condition] + sorted(i for i in growthcurves[x].unique() if i != self.control_condition)
-		elif x == self.column_sample:
-			xorder = [self.control_strain] + sorted(i for i in growthcurves[x].unique() if i != self.control_strain)
-		else:
-			message = f"The selected x-axis category does not correspond to an existing column in the input table."
-			logger.warning(message)
-			xorder = None
-		seaborn.stripplot(
+		xorder = self._get_xorder(x, growthcurves[x].unique())
+
+		ax = seaborn.stripplot(
 			data = growthcurves,
 			x = x, y = y, hue = hue,
 			ax = ax,
@@ -126,32 +245,15 @@ class AnovaPlot:
 			dodge = True,
 			order = xorder
 		)
-		ax.legend = False
-		ax.set_ylim(growthcurves[y].min(), growthcurves[y].max())
+
+		# Calculate the mean auc for each condition-strain value
+		df = self._calculate_series_means(growthcurves, x, y, hue)
+		ax = self.add_median(df, ax = ax)
+
 		if filename:
-			ymin = growthcurves[y].min() - 10
-			ymax = growthcurves[y].max() + 10
-			ax = self.format_plot_main(ax, (ymin,ymax))
-			filename_svg = filename.with_suffix('.svg')
-			filename_png = filename.with_suffix('.png')
-			plt.savefig(filename_png, dpi = 500)
-			plt.savefig(filename_svg)
+			self.save_figure(ax, filename, ylims = (df[y].min(), df[y].max()))
+
 		return ax
-	def format_plot_main(self, ax:plt.Axes, ylims:Tuple[int,int] = None)-> plt.Axes:
-		ax.set_xlabel("Condition", fontsize = self.label_axis_fontsize)
-		ax.set_ylabel("Fitness (AUC)", fontsize = self.label_axis_fontsize)
-		ax.tick_params(axis = 'both', labelsize = self.label_ticks_fontsize)
-
-		if ylims:
-			ax.set_ylim(ylims[0], ylims[1])
-		return ax
-
-
-	def _arrange_table(self, table: pandas.DataFrame, by:str, control:str) -> pandas.DataFrame:
-		""" Basically sorts the data frame and put the control samples as the first sample in the table."""
-		table_control = table[table[by] == control]
-		table_notcontrol = table[table[by] != control]
-		return pandas.concat([table_control, table_notcontrol])
 
 	def anovaplotmultiple(self, growthcurves: pandas.DataFrame, groupby: str, filename: Optional[Path] = None):
 		""" Plots multiple anova plots in the same figure. Each plot will corespond to a
@@ -189,44 +291,28 @@ class AnovaPlot:
 			# Determine the x-y index for gridspec from the `index` value.
 			row, column = divmod(index, self.number_of_columns)
 			current_ax: plt.Axes = figure.add_subplot(grid[row, column])
-			ax = self.anovaplot(group, x = self.column_sample, y = self.column_value, hue = self.column_sample, ax = current_ax)
+
+			current_ax = self.anovaplot(group, x = self.column_sample, y = self.column_value, hue = self.column_sample, ax = current_ax)
 
 			# Format the current axis.
-			self.format_plot(ax, group_name, (ymin, ymax), is_first = column != 0)
+			self.format_plot(current_ax, group_name, (ymin, ymax), is_first = column != 0)
 		if filename:
 			filename_svg = filename.with_suffix('.svg')
 			filename_png = filename.with_suffix('.png')
 			plt.savefig(filename_png, dpi = 500)
 			plt.savefig(filename_svg)
 
-	def format_plot(self, ax: plt.Axes, name: str, ylims: Tuple[int, int], is_first: bool) -> plt.Axes:
-		""" Applys formatting parameters to the plot.
-			Parameters
-			----------
-			ax: plt.Axes
-				The ax object with the plot.
-			name: str
-				The name/title of the ax.
-			ylims: Optional[Tuple[int,int]]
-				The minimum and maximum values observed over the dataset. Used to adjust the axis bounds so that the min and max points aren't
-				cut off. Also used to make the y-axis consistent across all subplots in the panel.
-			is_first:bool
-				Whether this plot is the first one in the row. Used to determine whether to keep the y-axis labels/ticks
-		"""
+	def save_figure(self, ax: plt.Axes, filename: Path, ylims: Tuple[int, int])->plt.Axes:
+		""" Saves the current figure as both a png and svg file."""
+		ymin = ylims[0] * 0.95
+		ymax = ylims[1] * 1.05
 
-		if ylims:
-			ax.set_ylim(ylims[0], ylims[1])
-		# Remove the legend for individual plots. Save the first legend to add it later in an empty section of the panel.
-		ax.get_legend().set_visible(False)
-		ax.tick_params(axis = 'x', rotation = 45)
-		ax.set_title(name, fontsize = 30)
-		ax.set_xlabel(self.label_x, fontsize = 20)
-		ax.set_ylabel(self.label_y, fontsize = 20)
+		ax = self.format_plot_main(ax, (ymin, ymax))
 
-		# Since each row shares the same y-axis, disable the y-axis in all but the first plot in each column.
-		if is_first:
-			ax.yaxis.set_ticklabels([])
-			ax.set_ylabel("")
+		filename_svg = filename.with_suffix('.svg')
+		filename_png = filename.with_suffix('.png')
+		plt.savefig(filename_png, dpi = 500)
+		plt.savefig(filename_svg)
 
 		return ax
 
@@ -236,11 +322,12 @@ def plot_sigmas(sigmas: pandas.Series, filename: Path):
 	plt.savefig(filename)
 
 
-def plot_tukey(tukey_results: Dict[str, Any], folder: Path):
+def plot_tukey(tukey_results: Dict[str, Any], folder: Path)->plt.Axes:
 	for name, tukey_result in tukey_results.items():
 		filename = folder / f"tukey.{name}.png"
 		ax = tukey_result.plot_simultaneous()
 		plt.savefig(str(filename))
+	return ax
 
 
 def plot_qq(residuals: pandas.Series):

@@ -54,9 +54,13 @@ def convert_to_matrix(data: pandas.Series):
 
 
 class Filenames:
-	""" Holds the filenames for important files/figures/etc. Also implements the methods to save tables/figures."""
+	""" Holds the filenames for important files/figures/etc. Also implements the methods to save tables/figures.
 
-	def __init__(self, folder: Path, plot_growthcurves: bool = True, time_limit: Optional[int] = None):
+		Output File Stucture
+
+	"""
+
+	def __init__(self, folder: Path, plot_growthcurves: bool = True, time_limit: Optional[int] = None, wildtype: str = 'WT', control: str = 'RKS'):
 		self.table_format = '.tsv'
 		self.figure_format = '.svg'
 		folder = utilities.checkdir(folder)
@@ -64,12 +68,30 @@ class Filenames:
 		self.folder_figure = utilities.checkdir(folder / "figures")
 
 		# Tables
-		self.table_statistics = self.folder_data / ("statistics" + self.table_format)
-		self.table_growthcurve = self.folder_data / ("growthcurves" + self.table_format)
-		self.table_regression = self.folder_data / "regression.txt"
+		"""
+			The statistics table describes the logistic population model each sample was fitted to.
+			Columns:
+			- `condition`: str
+			- `strain`: str
+			- `condition:strain`: str (can probably be removed since the `condition` and `strain` columns already exist.
+			- `plate`: str
+			- `replicate`: int
+			- `N`: float
+			- `k`: float
+			- `r`: float
+			- `sigma`: float
+			- `auc_l`: float (The area under the logistic curve model.
+			- `auc_e`: float (The area under the observed population from the plate reader.)
+		"""
+
+		# Basically the same as the `populationmodel` table, but with the sample id as well. Should remove the above table since it is redundant.
+		self.table_logistic_population_model = self.folder_data / ("populationmodel" + self.table_format)
+		# Summarizes the regresson after applying an ordinary least-squares model to the input data.
+		self.ols_regression_model = self.folder_data / "regression.txt"
+		# Summarizes the results from the ANOVA analysis.
 		self.table_anova = self.folder_data / ("anova" + self.table_format)
-		self.table_coefficients = self.folder_data / ("coefficients" + self.table_format)
 		self.folder_tukey = utilities.checkdir(self.folder_data / "tukey")
+		# Contains all paired tukey calulations. Tukey operates as a pairwise calculation of the difference in means for each variable pair.
 		self.table_tukey = self.folder_tukey / ("tukey" + self.table_format)
 
 		# Figures
@@ -83,11 +105,7 @@ class Filenames:
 		# Plotters
 		self.plot_growthcurves = plot_growthcurves
 		self.growthcurve_plotter = graphics.PlotGrowthcurves(self.folder_figures_growthcurves, time_limit = time_limit)
-
-	def save_growthcurves(self, table: pandas.DataFrame, growthcurves: pandas.DataFrame):
-		growthcurves.to_csv(self.table_growthcurve, index = True, sep = '\t')
-		if self.plot_growthcurves:
-			self.growthcurve_plotter.plot_growthcurves(table, growthcurves)
+		self.anova_plotter = graphics.AnovaPlot(wildtype, control)
 
 	def generate_tukey_matrix(self, table: pandas.DataFrame):
 		groups = table.groupby(by = "name")
@@ -100,6 +118,17 @@ class Filenames:
 			df = pandas.concat([group, reverse_group])
 			matrix = df.pivot(index = 'group1', columns = 'group2', values = 'meandiff').fillna(0)
 			matrix.to_csv(filename, sep = "\t")
+
+	def save_anova(self, anova_table: pandas.DataFrame):
+		anova_table.to_csv(self.table_anova, sep = '\t', index = False)
+
+	def save_population_model(self, table: pandas.DataFrame, growthcurves: pandas.DataFrame):
+		growthcurves.to_csv(self.table_logistic_population_model, index = True, sep = '\t')
+		if self.plot_growthcurves:
+			self.growthcurve_plotter.plot_growthcurves(table, growthcurves)
+
+	def save_regression(self, regression: linear_model.RegressionResults):
+		self.ols_regression_model.write_text(str(regression.summary()))
 
 	def save_tukey_results(self, tukey_results: Dict[str, Any]):
 		tables = list()
@@ -122,35 +151,31 @@ class Filenames:
 		self.generate_tukey_matrix(newtable)
 		graphics.plot_tukey(tukey_results, self.folder_figures_tukey)
 
-	def save_sigmas(self, sigmas: pandas.Series):
+	def plot_sigmas(self, sigmas: pandas.Series):
 		graphics.plot_sigmas(sigmas, self.figure_sigmas)
 
-	def save_statistics_table(self, statistics_table: pandas.DataFrame):
-		statistics_table.to_csv(self.table_statistics, sep = '\t', index = False)
-
-	def save_regression(self, regression: linear_model.RegressionResults):
-		self.table_regression.write_text(str(regression.summary()))
-
-	def save_qq(self, regression: linear_model.RegressionResults):
+	def plot_qq(self, regression: linear_model.RegressionResults):
 		import matplotlib.pyplot as plt
 		from statsmodels.graphics import gofplots
-		fig = gofplots.qqplot(regression.resid, fit = True, line = '45')
+		gofplots.qqplot(regression.resid, fit = True, line = '45')
 		plt.savefig(self.figure_qq)
 
-	def save_anova(self, anova_table: pandas.DataFrame):
-		anova_table.to_csv(self.table_anova, sep = '\t', index = False)
+	def plot_anova_panel(self, auc_statistics_table: pandas.DataFrame):
+		self.anova_plotter.anovaplotmultiple(auc_statistics_table, 'condition', self.figure_anova_plot_groups)
+
+	def plot_anova(self, auc_statistics_table):
+		self.anova_plotter.anovaplot(auc_statistics_table, x = 'condition', y = 'auc_l', hue = 'strain',
+			filename = self.figure_anova_plot_main)
 
 
 class GrowthCurveAnalysis:
-	def __init__(self, project_folder: Path, plot_growthcurves: bool = True, wildtype:str = 'WT', control:str = 'RKS', time_limit: Optional[int] = None):
+	def __init__(self, project_folder: Path, plot_growthcurves: bool = True, wildtype: str = 'WT', control: str = 'RKS',
+			time_limit: Optional[int] = None):
 		self.project_folder = project_folder
 		self.time_limit = time_limit
 		self.time_column = 'Time'
 
-		self.filenames = Filenames(self.project_folder, plot_growthcurves, self.time_limit)
-
-
-		self.anova_plotter = graphics.AnovaPlot(wildtype, control)
+		self.filenames = Filenames(self.project_folder, plot_growthcurves, self.time_limit, wildtype = wildtype, control = control)
 
 	def load_data(self, filename: Path) -> pandas.DataFrame:
 		"""
@@ -191,18 +216,20 @@ class GrowthCurveAnalysis:
 		auc_statistics_table = sample_metadata_table.merge(growthcurve_table, left_index = True, right_index = True)
 		regression, anova_result = anova(auc_statistics_table)
 		tukey_results = tukeyhsd(auc_statistics_table)
-		# Generate the full anova plot
-		self.anova_plotter.anovaplot(auc_statistics_table, x = 'condition', y = 'auc_l',hue =  'strain', filename = self.filenames.figure_anova_plot_main)
-		# Generate the grouped anova plot.
-		self.anova_plotter.anovaplotmultiple(auc_statistics_table, 'condition', self.filenames.figure_anova_plot_groups)
 
-		self.filenames.save_sigmas(growthcurve_table['sigma'])
+		# Generate the full anova plot
+
+		# Generate the grouped anova plot.
+
 		self.filenames.save_anova(anova_result)
 		self.filenames.save_regression(regression)
-		self.filenames.save_statistics_table(auc_statistics_table)
 		self.filenames.save_tukey_results(tukey_results)
-		self.filenames.save_qq(regression)
-		self.filenames.save_growthcurves(timeseries_table, sample_table)
+		self.filenames.save_population_model(timeseries_table, sample_table)
+
+		self.filenames.plot_anova(auc_statistics_table)
+		self.filenames.plot_anova_panel(auc_statistics_table)
+		self.filenames.plot_sigmas(growthcurve_table['sigma'])
+		self.filenames.plot_qq(regression)
 
 
 def main():
@@ -245,7 +272,6 @@ def create_parser():
 		type = str,
 		default = 'WT'
 	)
-
 
 	args = parser.parse_args()
 	return args
