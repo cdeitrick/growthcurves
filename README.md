@@ -36,9 +36,12 @@ Will have the following columns:
 #### `regression.txt`
 Presents the regression statistics behind the anova model. This is essentially a constructed linear model with the estimated coefficients for each variable in the anova model.
 
+### Figures
 
+#### `anovaplot.main`
+   A figure presenting a general summary of the nested anova. It shows how the AUC values for each sample correlated with the sample, condition, and plate categorical variables.
 
-### File Structure
+### Output File Structure
 ```
 .
 |---- data
