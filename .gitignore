@@ -125,3 +125,6 @@ dmypy.json
 
 # manually added
 .idea/
+
+# Ignore the example dataset for now
+example/
