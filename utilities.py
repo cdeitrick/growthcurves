@@ -39,7 +39,7 @@ def normalize_series(data: pandas.Series) -> pandas.Series:
 	return data - data.min()
 
 
-def normalize_table(table: pandas.Series) -> pandas.DataFrame:
+def normalize_table(table: pandas.DataFrame) -> pandas.DataFrame:
 	""" Normalizes each column in the table by the minimum measured value for that column"""
 	for column in table.columns:
 		table[column] = normalize_series(table[column])

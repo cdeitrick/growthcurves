@@ -4,10 +4,9 @@ from typing import Any, Dict, List, Optional, Tuple
 import matplotlib.pyplot as plt
 import pandas
 import seaborn
-
+import utilities
 plt.style.use('ggplot')
 import equations
-
 from loguru import logger
 
 
@@ -20,7 +19,7 @@ class PlotGrowthcurves:
 		self.labely = 'population'
 		self.color_time_limit = 'tab:red'
 
-		self.figure_format = '.svg'
+		self.figure_format = 'png' # TODO: make commandline option
 
 	def plot_growthcurves(self, timeseries_table: pandas.DataFrame, coefficient_table: pandas.DataFrame):
 		"""
@@ -35,9 +34,11 @@ class PlotGrowthcurves:
 		groups = coefficient_table.groupby(by = ['strain', 'condition', 'plate'])
 		for label, coefficient_group in groups:
 			label_str = '.'.join(label)
-			filename = self.folder / f"growthcurve.{label_str}.{self.figure_format}"
-			group_timeseries = timeseries_table.T.loc[list(coefficient_group.index)]
-			self.plot_group(group_timeseries, coefficient_group, filename)
+			for filetype in ['png', 'svg']:
+				f = utilities.checkdir(self.folder / filetype)
+				filename = f / f"growthcurve.{label_str}.{self.figure_format}"
+				group_timeseries = timeseries_table.T.loc[list(coefficient_group.index)]
+				self.plot_group(group_timeseries, coefficient_group, filename)
 
 	def plot_group(self, timeseries: pandas.DataFrame, fit_data: pandas.DataFrame, filename: Path):
 		colormap = seaborn.color_palette('Paired', len(timeseries) * 2)
@@ -133,7 +134,7 @@ class AnovaPlot:
 			ax.set_ylim(ylims[0], ylims[1])
 		return ax
 
-	def format_plot(self, ax: plt.Axes, name: str, ylims: Tuple[int, int], is_first: bool) -> plt.Axes:
+	def format_plot(self, ax: plt.Axes, name: str, ylims: Tuple[float,float], is_first: bool) -> plt.Axes:
 		""" Applys formatting parameters to the plot.
 			Parameters
 			----------
@@ -152,7 +153,7 @@ class AnovaPlot:
 			ax.set_ylim(ylims[0], ylims[1])
 		# Remove the legend for individual plots. Save the first legend to add it later in an empty section of the panel.
 		ax.get_legend().set_visible(False)
-		ax.tick_params(axis = 'x', rotation = 90)
+		ax.tick_params(axis = 'x', rotation = 45)
 		ax.set_title(name, fontsize = 30)
 		ax.set_xlabel(self.label_x, fontsize = 20)
 		ax.set_ylabel(self.label_y, fontsize = 20)
@@ -322,13 +323,17 @@ def plot_sigmas(sigmas: pandas.Series, filename: Path):
 	plt.savefig(filename)
 
 
-def plot_tukey(tukey_results: Dict[str, Any], folder: Path)->plt.Axes:
+def plot_tukey(tukey_results: Dict[str, Any], folder: Path)->Optional[plt.Axes]:
 	for name, tukey_result in tukey_results.items():
 		filename = folder / f"tukey.{name}.png"
-		ax = tukey_result.plot_simultaneous()
-		plt.savefig(str(filename))
+		try:
+			ax = tukey_result.plot_simultaneous()
+			plt.savefig(str(filename))
+		except Exception as exception:
+			logger.error(exception)
+			ax = None
+
 	return ax
 
 
-def plot_qq(residuals: pandas.Series):
-	pass
+

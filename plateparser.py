@@ -1,10 +1,11 @@
 import itertools
-from pathlib import Path
-from typing import Dict, List, Optional
 import re
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
 import pandas
 from loguru import logger
-
+FORMAT = "[strain].[consition].[plate].[replicate}]"
 
 class PlateReaderParser:
 	def __init__(self):
@@ -17,6 +18,36 @@ class PlateReaderParser:
 		self.time_offset = 24 * 3600
 
 		self.strains = {'WT', 'N455K', 'P421L', 'N274Y', 'tRNA', 'A224T'}
+
+		self.cleaner = TableCleaner()
+
+	def _clean_subtable(self, subtable: pandas.DataFrame, columns: List[str], offset: int) -> pandas.DataFrame:
+		""" Cleans up the subtables from a plate reader output file prior to combining them together."""
+
+		subtable.columns = columns
+		# Correct the timepoints. Each table represents a 24 hour chunk of time.
+		subtable[self.time_column_name_original] = subtable[self.time_column_name_original] + offset
+		return subtable
+
+	def _combine_tables(self, table_list: List[pandas.DataFrame]) -> pandas.DataFrame:
+		""" Combine all of the tables extracted from the plate reader.
+		"""
+
+		if len(table_list) == 1:
+			return table_list[0]
+		# Need to modify additional tables to correct the timepoints and column names.
+		# Assume that only the first column has the proper column labels.
+		first_table_columns = table_list[0].columns
+		modified_tables = list()
+		for index, table in enumerate(table_list):
+			offset = self.time_offset * index
+			subtable = self._clean_subtable(table, first_table_columns, offset)
+
+			modified_tables.append(subtable)
+
+		new_table = pandas.concat(modified_tables)
+
+		return new_table
 
 	def _get_table_indicies(self, table: pandas.DataFrame) -> List[int]:
 		""" Extracts all tables from a plate reader output file, ignoring any metadata."""
@@ -50,65 +81,6 @@ class PlateReaderParser:
 			table_list.append(nonblank_table)
 		return table_list
 
-	@staticmethod
-	def group_columns_by_sample(columns: List[str]) -> Dict[str, List[str]]:
-		groups = dict()
-		for label in columns:
-			parts = label.split(' ')
-
-			if is_strain(parts[0]):
-				strain = parts[0]
-			else:
-				strain = 'blank'
-			if strain not in groups: groups[strain] = list()
-			groups[strain].append(label)
-
-		del groups['blank']  # Don't need this right now.
-
-		return groups
-
-	def _clean_subtable(self, subtable: pandas.DataFrame, columns: List[str], offset: int) -> pandas.DataFrame:
-		""" Cleans up the subtables from a plate reader output file prior to combining them together."""
-
-		subtable.columns = columns
-		# Correct the timepoints. Each table represents a 24 hour chunk of time.
-		subtable[self.time_column_name_original] = subtable[self.time_column_name_original] + offset
-		return subtable
-
-	def _combine_tables(self, table_list: List[pandas.DataFrame]) -> pandas.DataFrame:
-		""" Combine all of the tables extracted from the plate reader.
-		"""
-
-		if len(table_list) == 1:
-			return table_list[0]
-		# Need to modify additional tables to correct the timepoints and column names.
-		# Assume that only the first column has the proper column labels.
-		first_table_columns = table_list[0].columns
-		modified_tables = list()
-		for index, table in enumerate(table_list):
-			offset = self.time_offset * index
-			subtable = self._clean_subtable(table, first_table_columns, offset)
-
-			modified_tables.append(subtable)
-
-		new_table = pandas.concat(modified_tables)
-
-		return new_table
-
-	def remove_extra_columns(self, table: pandas.DataFrame, plate: int) -> pandas.DataFrame:
-		sample_groups = self.group_columns_by_sample(table.columns)
-		logger.info(f"Removing columns that do not correspond to a specific sample.")
-		logger.info(f"Will only keep {sorted(sample_groups.keys())}")
-		# get rid of blank columns for now.
-		sample_columns = sorted(itertools.chain.from_iterable(sample_groups.values()))
-		reduced_table = table[[self.time_column_name_original] + sample_columns]
-
-		# Rename the columns to remove whitespace and to add the replicate ID (plate vs. technical)
-		reduced_table.columns = [self.time_column_name] + [_rename_sample(i, plate) for i in sample_columns]
-		import utilities
-		utilities.validate_labels(reduced_table.columns)
-		return reduced_table
-
 	def read_table(self, filename: Path, plate: int):
 		"""
 			Reads in a tils growth curve table. The excel tables have a bunch of
@@ -127,15 +99,105 @@ class PlateReaderParser:
 		combined_table = self._combine_tables(table_list)
 
 		# Clean up the table
-		clean_table = self.clean_table(combined_table, plate)
-
+		# Need to change the column names
+		#clean_table = self.clean_table(combined_table, plate)
+		clean_table = self.cleaner.clean_table(combined_table, plate)
 		return clean_table
+
+
+class TableCleaner:
+	def __init__(self):
+		self.time_column_name_original = 'Time [s]'
+		self.time_column_name = 'time'
+		self.label_delimiter = '.'
+		self.label_format = f"[strain]{self.label_delimiter}[consition]{self.label_delimiter}[plate]{self.label_delimiter}[replicate]"
+		self.rename_columns_manually = False
+
+	@staticmethod
+	def _group_columns_by_sample(columns: List[str]) -> Dict[str, List[str]]:
+		groups = dict()
+		for label in columns:
+			parts = label.split(' ')
+
+			if is_strain(parts[0]):
+				strain = parts[0]
+			else:
+				strain = 'blank'
+			if strain not in groups: groups[strain] = list()
+			groups[strain].append(label)
+
+		del groups['blank']  # Don't need this right now.
+
+		return groups
+	def _validate_column_label(self, label: str) -> str:
+		""" Validates that the column follows the required format."""
+
+		while True:
+			label_parts = self._split_label(label)
+			if label_parts is None and label != self.time_column_name:
+				label = input(f"Rename '{label}' to follow the format '{self.label_format}':")
+
+			else:
+				break
+		return label
+	def _split_label(self, label: str) -> Optional[Tuple[str, str, str, str]]:
+		try:
+			strain, media, plate, replicate = label.strip().split(self.label_delimiter)
+			return strain, media, plate, replicate
+		except ValueError:
+			return None
+
+	@staticmethod
+	def _rename_sample(label: str, plate: int) -> str:
+		""" The original label may not conform perfectly to the expected specs."""
+
+		sample, *media, replicate = label.split(' ')
+
+		logger.warning(f"Running patch to fix typo in '{label}'")
+		lower = [i.lower() for i in media]
+		if 'low' in lower:
+			media = 'RKS-lowph'
+		elif 'high' in lower:
+			media = 'RKS-highph'
+		else:
+			media = 'RKS-neutral'
+
+		result = f"{sample}.{media.lower()}.{plate}.{replicate}"
+		logger.info(f"Renamed '{label}' to '{result}'")
+		return result
+
+	def _process_table_column_labels(self, table: pandas.DataFrame, plate: int) -> pandas.DataFrame:
+		sample_groups = self._group_columns_by_sample(table.columns)
+		logger.info(f"Removing columns that do not correspond to a specific sample.")
+		logger.info(f"Will only keep {sorted(sample_groups.keys())}")
+
+		# get rid of blank columns.
+		sample_columns = sorted(itertools.chain.from_iterable(sample_groups.values()))
+		reduced_table = table[[self.time_column_name_original] + sample_columns]
+
+		# Rename the columns to remove whitespace and to add the replicate ID (plate vs. technical)
+		# Patch to rename columns manually.
+		reduced_table.columns = [self.time_column_name] + [self._rename_sample(i, plate) for i in sample_columns]
+
+		if self.rename_columns_manually:
+			logger.warning("Running patch to rename columns manually.")
+			newcolumns = list()
+			for column in reduced_table.columns:
+				newlabel = input(f"Rename '{column}': ").strip()
+				if newlabel != '':
+					newcolumns.append(newlabel)
+				else:
+					newcolumns.append(column)
+
+		import utilities
+		utilities.validate_labels(reduced_table.columns)
+		return reduced_table
 
 	def clean_table(self, table: pandas.DataFrame, plate: int) -> pandas.DataFrame:
 		# Need to clean up the tables.
 		# Remove the clomns that were empty and rename the columns to include replicate type.
-		table = self.remove_extra_columns(table, plate)
-
+		table = self._process_table_column_labels(table, plate)
+		# table = self.rename_samples(table, plate)
 		# Remove any extra stuff placed after the table
 		# Use the time column to figure out when the table stops.
 		# blank_rows = table[self.time_column_name].isna()
@@ -150,15 +212,7 @@ class PlateReaderParser:
 		return table
 
 
-def _rename_sample(label: str, plate: int) -> str:
-	try:
-		sample, media, replicate = label.split(' ')
-	except ValueError:
-		#logger.error(f"Could not convert plate {plate}, {label}")
-		return label
-	return f"{sample}.{media.capitalize()}.{plate}.{replicate}"
-
-def is_strain(string:str)->bool:
+def is_strain(string: str) -> bool:
 	""" Checks if the column has a valid name for a condition."""
 	# Need to remove stuff like 'B2' or 'A13'
 	pattern = "^[A-Z][0-9]{1,2}$"
@@ -168,7 +222,8 @@ def is_strain(string:str)->bool:
 		return False
 	return True
 
-if __name__ == "__main__":
+
+def main_20191014():
 	folder = Path("/media/cld100/FA86364B863608A1/Users/cld100/Storage/projects/tils/growthcurves-2019-10-14/original_tables")
 	parser = PlateReaderParser()
 	lys1 = folder / "TilSGC.Std.Lys.Iso.190815.xlsx"
@@ -200,3 +255,27 @@ if __name__ == "__main__":
 	output_filename = folder.parent / "TilSGC.xlsx"
 	logger.info(f"Saving as {output_filename}")
 	combined_table.to_excel(output_filename, index = False)
+
+
+def main():
+	# TODO: remove extra time columns
+	# TODO: Add a way to specify the expected strains and test for typos.
+	project_folder = Path.home() / "storage" / "projects" / "tils" / "2019-11-22-growthcurves"
+	table_folder = project_folder / "tables"
+	output_filename = project_folder / "TilSGC.pH.tsv"
+	parser = PlateReaderParser()
+
+	tables = [
+		table_folder / "TilSGC.Std.High.Low.191115.xlsx",
+		table_folder / "TilSGC.Std.High.Low.191118.xlsx",
+		table_folder / "TilSGC.Std.High.Low.191122.xlsx"
+	]
+
+	parsed_tables = [parser.read_table(filename, index + 1).reset_index(drop = True) for index, filename in enumerate(tables)]
+	combined_table = pandas.concat(parsed_tables, axis = 1)
+	combined_table = combined_table.dropna()
+	combined_table.to_csv(output_filename, sep = '\t', index = False)
+
+
+if __name__ == "__main__":
+	main()
