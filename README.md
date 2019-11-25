@@ -22,7 +22,7 @@ python runanova.py
 #### `anova.tsv`
 Presents a summary of the nested anova statistics from the input dataset.
 
-#### `growthcurves.tsv`
+#### `populationmodel.tsv`
 Summarizes the statistics behind the anova analysis
 Will have the following columns:
 
@@ -35,6 +35,9 @@ Will have the following columns:
 
 #### `regression.txt`
 Presents the regression statistics behind the anova model. This is essentially a constructed linear model with the estimated coefficients for each variable in the anova model.
+
+#### `maximumgrowth.txt`
+Contains the maximum growth value observed for each sample, sorted from lowest to highest. Useful when checking for samples with little to no growth.
 
 ### Figures
 
@@ -52,13 +55,20 @@ Presents the regression statistics behind the anova model. This is essentially a
 |----|----|---- tukey.strain.tsv
 |----|----|---- tukey.tsv
 |----|---- anova.tsv
-|----|---- coefficients.tsv
-|----|---- growthcurves.tsv
+|----|---- populationmodel.tsv
 |----|---- regression.txt
-|----|---- statistics.tsvs
+|----|---- maximumgrowth.txt
 |---- figures
 |----|---- anovaplot.main.(png|svg)
 |----|---- anovaplot.panel.(png|svg)
 |----|---- qq.svg
 |----|---- sigmas.svg
+|----|---- tukey
+|----|----|---- tukey.condition_strain.png
+|----|----|---- tukey.condition.png
+|----|----|---- tukey.plate.png
+|----|----|---- tukey.strain.png
+|----|---- growthcurves
+|----|----|---- png
+|----|----|---- svg
 ````
