@@ -1,7 +1,7 @@
 import numpy
 from loguru import logger
 
-very_small_number = 1E-6
+very_small_number = 0
 
 
 def logistic_equation(t, k, N, r) -> float:
@@ -16,7 +16,7 @@ def logistic_equation_integral(t, k, N, r) -> float:
 	A = (k - N) / N
 	numerator = k * numpy.log(A + numpy.exp(r * t))
 	result = numerator / r
-	if result < 0:
+	if result < 0 and False:
 		logger.warning(f"The calculated AUC is negative: {result}. Using a value of {very_small_number} instead.")
 		result = very_small_number
 	return result

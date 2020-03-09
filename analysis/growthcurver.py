@@ -7,7 +7,7 @@ from loguru import logger
 from scipy.integrate import trapz
 from scipy.optimize import curve_fit
 
-import equations
+from analysis import equations
 
 
 def summarize_growth(table: pandas.DataFrame, time_limit: Optional[int] = None) -> pandas.DataFrame:
@@ -42,8 +42,8 @@ def summarize_growth(table: pandas.DataFrame, time_limit: Optional[int] = None) 
 			'sigma':  calculate_goodness_of_fit(normalized_data, k, N, r)
 		}
 		results.append(result)
-	return pandas.DataFrame(results).set_index('sample')
-
+	df = pandas.DataFrame(results).set_index('sample')
+	return df
 
 def calculate_goodness_of_fit(empirical_data: pandas.Series, k: float, N: float, r: float) -> float:
 	total = 0

@@ -4,7 +4,7 @@ from typing import List
 import pandas
 import pytest
 
-import plateparser
+from platereader import plateparser
 
 
 @pytest.fixture
@@ -77,3 +77,6 @@ def test_combine_tables(filename, plate):
 	table_list = plate._extract_tables(filename, table_indicies_start)
 
 	combined_table = plate._combine_tables(table_list)
+
+def test_scan_for_typos(filename, plate):
+	pass
