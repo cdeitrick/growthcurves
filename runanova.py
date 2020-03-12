@@ -101,9 +101,9 @@ def create_parser(args: List[str] = None):
 
 
 def main():
-	project_folder = Path.home() / "storage" / "projects" / "tils" / "growthcurves" / "debuggrowthcurves"
-	filename_table = project_folder / "2020-03-03-growthcurves.tsv"
-	output_folder = utilities.checkdir(project_folder / "typetest")
+	project_folder = Path.home() / "storage" / "projects" / "tils" / "growthcurves" / "2020-03-11-growthcurves"
+	filename_table = project_folder / "2020-03-11-growthcurves.tsv"
+	output_folder = utilities.checkdir(project_folder / "ungrouped")
 	current_args = [
 		'--output', str(output_folder),
 		'--control', 'RKS',
@@ -124,12 +124,22 @@ def main():
 		strains = args.strains
 
 	)
-
-	analysis_workflow.run(
-		table,
-		'auc_e' if args.empirical else 'auc_l',
-		project_folder = project_folder / "debuggrowthcurves"
-	)
+	PAIRWISE = False
+	if PAIRWISE:
+		treatments = sorted(set([i.split('.')[1] for i in table.columns if i != 'time']))
+		for treatment in treatments:
+			treatment_table_columns = [i for i in table.columns if (i != 'time' and i.split('.')[1] == treatment)]
+			print(treatment_table_columns)
+			treatment_table = table[['time'] + treatment_table_columns]
+			analysis_workflow.run(
+				treatment_table, 'auc_e', utilities.checkdir(project_folder / treatment)
+			)
+	else:
+		analysis_workflow.run(
+			table,
+			'auc_e' if args.empirical else 'auc_l',
+			project_folder = output_folder
+		)
 
 
 if __name__ == "__main__":

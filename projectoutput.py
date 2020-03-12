@@ -182,6 +182,7 @@ def save_table_tukey(tukey_results: Dict[str, Any], filename: Path, filename_jso
 	filename_json.write_text(json.dumps(_temp, indent = 4, sort_keys = True))
 
 	tables = list()
+	metatable = list() # Stores metadata about each table. Things like how many pass/fail items were present, etc.
 	for name, tukey_result in tukey_results.items():
 		text = tukey_result.summary().as_csv()
 		# Remove the header
@@ -195,12 +196,31 @@ def save_table_tukey(tukey_results: Dict[str, Any], filename: Path, filename_jso
 			message = "The version of TukeyHSD currently implemented in statsmodels does not have a `pvalues` attribute, so that will be missing from the result."
 			logger.warning(message)
 			df['pvalues'] = None
+		# Append a version of the tables with `group` and `group2` swapped for easier filtering since you only need to filter on one column.
+
+		if name == 'condition_strain':
+			get_treatment = lambda s: s.split('-')[0].strip()
+			get_strain = lambda s: s.split('-')[1].strip()
+			df['treatments'] = [f"{get_treatment(i)}-{get_treatment(j)}" for i, j in zip(df['group1'].tolist(), df['group2'].tolist())]
+			df['strains'] = [f"{get_strain(i)}-{get_strain(j)}" for i, j in zip(df['group1'].tolist(), df['group2'].tolist())]
+
+		elif name == 'condition':
+			pass
+
 		tables.append(df)
 	newtable = pandas.concat(tables)
 	# Add duplicates for each series with reversed group1/group2 keys. This will make is easier to lookup a specific group or row.
 	cleaner_tukey = CleanTukey()
 	fulltable = cleaner_tukey.clean(newtable)
+	# Add a couple of columns for easier inspection
+
 	fulltable.to_csv(filename, sep = '\t', index = False)
+
+	# Also save a version with duplicate rows for easier parsing.
+	newtable = fulltable.copy(deep = True)
+	newtable['group1'], newtable['group2'] = newtable['group2'], newtable['group1']
+	newtable = newtable.sort_values(by = ['name', 'group1', 'group2'])
+	newtable.to_csv(filename.with_suffix('.duplicated.tsv'), sep = "\t", index = False)
 	return fulltable
 
 

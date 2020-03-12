@@ -121,8 +121,5 @@ class PlateReaderParser:
 
 		clean_table = self.cleaner.clean_table(combined_table, plate)
 		self.scan_for_typos(clean_table.columns)
-		for i in clean_table.columns:
-			if '241' in i:
-				logger.warning(f"Found {i} in table {filename}")
 
 		return clean_table

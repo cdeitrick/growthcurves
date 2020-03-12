@@ -270,13 +270,13 @@ class GroupPlot:
 
 if __name__ == "__main__":
 	tils_folder = Path.home() / "storage" / "projects" / "tils"
-	growthcurve_folder = tils_folder / "growthcurves" / "debuggrowthcurves"
+	growthcurve_folder = tils_folder / "growthcurves" / "2020-03-11-growthcurves"
 	# table_filename = growthcurve_folder / "2020-03-03-growthcurves.tsv"
 	# /media/cld100/FA86364B863608A1/Users/cld100/Storage/projects/tils/growthcurves/2020-02-26-growthcurves/consolidated-notgrouped/data/auc_statistics.tsv
 
-	table_filename = tils_folder / "growthcurves" / "2020-02-26-growthcurves/consolidated-notgrouped" / "data" / "auc_statistics.tsv"
+	table_filename = tils_folder / "growthcurves" / "2020-03-11-growthcurves" / "ungrouped" / "data" / "auc_statistics.tsv"
 	filename = growthcurve_folder / "condition_strain.png"
 	t = pandas.read_csv(table_filename, sep = "\t")
 
 	app = GroupPlot()
-	app.plot(t)#, filename)
+	app.plot(t, filename)

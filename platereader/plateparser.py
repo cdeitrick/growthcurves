@@ -1,14 +1,17 @@
+import argparse
 from pathlib import Path
 from typing import *
 
 import pandas
 from loguru import logger
-import argparse
+
 from platereader.platereaderparser import PlateReaderParser
 
 FORMAT = "[strain].[condition].[plate].[replicate}]"
 
-
+def patch_to_remove_old_arg(table:pandas.DataFrame)->pandas.DataFrame:
+	table = table[[i for i in table if ('Arg' not in i and 'arg' not in i)]]
+	return table
 class Application:
 	""" Basically acts as the entrypoint to the platereader parser."""
 
@@ -35,6 +38,10 @@ class Application:
 			plate_number = index + 1 + starting_plate
 			logger.info(f"Converting {filename} representing plate {plate_number} to the required format...")
 			result = self.parser.read_table(filename, plate_number).reset_index(drop = True)
+			logger.warning(f"Patch to remove old Arg columns.")
+			_patch_files = ["1.24.20.Fe3.Arg.Rep1.xlsx", "2.3.20.Fe3.Arg.Rep2.xlsx", "2.5.20.Fe3.Arg.Rep3.xlsx"]
+			if filename.name in _patch_files:
+				result = patch_to_remove_old_arg(result)
 			parsed_tables.append(result)
 		return parsed_tables
 
@@ -63,7 +70,7 @@ class Application:
 			for k, v in sorted(counts.items()):
 				print(f"\t{v}\t{k}")
 
-	def format_fields(self, labels:List[str])->List[str]:
+	def format_fields(self, labels: List[str]) -> List[str]:
 		""" Corrects each column label using self.labelmap."""
 		cols = list()
 		for column in labels:
@@ -72,7 +79,8 @@ class Application:
 					column = column.replace(key, value)
 			cols.append(column)
 		return cols
-	def run(self, project_folder: Path, table_folder:Path, project_name: str = None):
+
+	def run(self, project_folder: Path, table_folder: Path, project_name: str = None):
 		""" Provides the entrypoint for the platereader parser. This code here will likely be modified based on the current run."""
 		# TODO: Add a way to specify the expected strains and test for typos.
 		if project_name is None:
@@ -86,7 +94,6 @@ class Application:
 		combined_table = pandas.concat(parsed_tables, axis = 1)
 		combined_table = self.parser.cleaner.remove_redundant_time_columns(combined_table)
 
-
 		# Convert to float?
 		for column in combined_table.columns:
 			if column == 'time': continue
@@ -95,11 +102,15 @@ class Application:
 		# Convert the condition fields from lowercase to tilte case.
 
 		combined_table.columns = self.format_fields(combined_table.columns)
+		# remove `N/A` values
+		combined_table = combined_table[[i for i in combined_table.columns if 'N/A' not in i]]
 		self.summarize_table(combined_table)
 		check_for_duplicate_columns(combined_table)
+
 		combined_table.to_csv(output_filename, sep = '\t', index = False)
 
-def lists_are_equal(left:List[float], right:List[float])->bool:
+
+def lists_are_equal(left: List[float], right: List[float]) -> bool:
 	import math
 	results = list()
 	for left_value, right_value in zip(left, right):
@@ -108,8 +119,8 @@ def lists_are_equal(left:List[float], right:List[float])->bool:
 
 	return all(results)
 
-def check_for_duplicate_columns(table:pandas.DataFrame):
 
+def check_for_duplicate_columns(table: pandas.DataFrame):
 	columns = table.columns
 	seen = set()
 	for left in columns:
@@ -128,13 +139,14 @@ def check_for_duplicate_columns(table:pandas.DataFrame):
 def main():
 	# Correct some typos in the labels.
 
-	project_name = "2020-02-26-growthcurves"
+	project_name = "2020-03-11-growthcurves"
 	project_folder = Path.home() / "storage" / "projects" / "tils" / "growthcurves" / project_name
-	table_folder = project_folder /"tables" / "original_tables"
+	table_folder = project_folder / "tables" / "original_tables"
 
 	Application().run(project_folder, table_folder)
 
-def create_parser(args:Optional[List[str]] = None)->argparse.Namespace:
+
+def create_parser(args: Optional[List[str]] = None) -> argparse.Namespace:
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument(
@@ -153,6 +165,7 @@ def create_parser(args:Optional[List[str]] = None)->argparse.Namespace:
 	args = parser.parse_args(args)
 
 	return args
+
 
 if __name__ == "__main__":
 	main()
