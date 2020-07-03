@@ -40,8 +40,8 @@ class Application:
 			result = self.parser.read_table(filename, plate_number).reset_index(drop = True)
 			logger.warning(f"Patch to remove old Arg columns.")
 			_patch_files = ["1.24.20.Fe3.Arg.Rep1.xlsx", "2.3.20.Fe3.Arg.Rep2.xlsx", "2.5.20.Fe3.Arg.Rep3.xlsx"]
-			if filename.name in _patch_files:
-				result = patch_to_remove_old_arg(result)
+			#if filename.name in _patch_files:
+			#	result = patch_to_remove_old_arg(result)
 			parsed_tables.append(result)
 		return parsed_tables
 
@@ -87,7 +87,7 @@ class Application:
 			project_name = project_folder.name
 		output_filename = project_folder / f"{project_name}.tsv"
 
-		tables_other = list(table_folder.iterdir())
+		tables_other = list(i for i in table_folder.iterdir() if i.suffix == '.xlsx')
 
 		parsed_tables = self.parse_tables(tables_other)
 
@@ -139,10 +139,10 @@ def check_for_duplicate_columns(table: pandas.DataFrame):
 def main():
 	# Correct some typos in the labels.
 
-	project_name = "2020-03-11-growthcurves"
+	project_name = "2020-07-03-growthcurves"
 	project_folder = Path.home() / "storage" / "projects" / "tils" / "growthcurves" / project_name
 	table_folder = project_folder / "tables" / "original_tables"
-
+	table_folder = Path("/home/cld100/storage/projects/tils/growthcurves/2020-07-03-growthcurves/original_tables")
 	Application().run(project_folder, table_folder)
 
 

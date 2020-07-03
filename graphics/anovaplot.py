@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import *
 
 import matplotlib.pyplot as plt
+
 import pandas
 import seaborn
 from loguru import logger
@@ -174,7 +175,7 @@ class AnovaPlotNested:
 	def save_figure(ax: plt.Axes, filename: Path) -> plt.Axes:
 		""" Saves the current figure as both a png and svg file."""
 
-		filename_svg = filename.with_suffix('.svg')
+		filename_svg = filename.with_suffix('.ps')
 		filename_png = filename.with_suffix('.png')
 		plt.savefig(filename_png, dpi = 500)
 		plt.savefig(filename_svg)

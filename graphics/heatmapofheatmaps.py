@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import *
 
 import matplotlib.pyplot as plt
+plt.rcParams['svg.fonttype'] = 'none'
 import pandas
 import seaborn
 from loguru import logger
@@ -199,7 +200,7 @@ class Heatmap:
 
 		if filename:
 			plt.savefig(filename)
-			plt.savefig(filename.with_suffix('.svg'))
+			plt.savefig(filename.with_suffix('.pdf'))
 		plt.show()
 
 

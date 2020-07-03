@@ -23,7 +23,8 @@ class Filenames:
 
 	def __init__(self, folder: Path):
 		self.table_format = '.tsv'
-		self.figure_format = '.svg'
+		self.figure_format = '.pdf'
+		# TODO: Make sure these options are actually
 		folder = utilities.checkdir(folder)
 		self.folder_data = utilities.checkdir(folder / "data")
 		self.folder_figure = utilities.checkdir(folder / "figures")

@@ -165,7 +165,7 @@ class AnovaPanelPlot:
 
 		ax = self.format_plot_main(ax, (ymin, ymax))
 
-		filename_svg = filename.with_suffix('.svg')
+		filename_svg = filename.with_suffix('.pdf')
 		filename_png = filename.with_suffix('.png')
 		plt.savefig(filename_png, dpi = 500)
 		plt.savefig(filename_svg)

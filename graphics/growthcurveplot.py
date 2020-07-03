@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import *
 
 import matplotlib.pyplot as plt
+plt.rcParams['svg.fonttype'] = 'none'
 import pandas
 import seaborn
 

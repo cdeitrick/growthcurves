@@ -13,7 +13,7 @@ if TRACE:
 	logger.remove()  # Need to remove the default sink so that the logger doesn't print messages twice.
 	import sys
 
-	logger.add(sys.stderr, level = "TRACE")
+	logger.add(sys.stderr, level = "plt.rcParams['svg.fonttype'] = 'none'TRACE")
 
 pandas.set_option('mode.chained_assignment', None)
 EXPECTED_FORMAT = "[strain].[consition].[plate].[replicate]"
@@ -103,7 +103,7 @@ def create_parser(args: List[str] = None):
 def main():
 	project_folder = Path.home() / "storage" / "projects" / "tils" / "growthcurves" / "2020-03-11-growthcurves"
 	filename_table = project_folder / "2020-03-11-growthcurves.tsv"
-	output_folder = utilities.checkdir(project_folder / "ungrouped")
+	output_folder = utilities.checkdir(project_folder / "ungrouped2")
 	current_args = [
 		'--output', str(output_folder),
 		'--control', 'RKS',
